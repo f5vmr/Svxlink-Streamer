@@ -108,19 +108,25 @@ echo "Checking streamer health endpoint..."
 
 health_ok=0
 
-for attempt in 1 2 3 4 5; do
-    if python3 - <<'PY'
+for attempt in 1 2 3 4 5 6 7 8 9 10; do
+    if python3 - <<'PY' 2>/dev/null
 import json
 import urllib.request
 
-with urllib.request.urlopen(
-    "http://127.0.0.1:8765/health",
-    timeout=2,
-) as response:
-    data = json.load(response)
+try:
+    with urllib.request.urlopen(
+        "http://127.0.0.1:8765/health",
+        timeout=2,
+    ) as response:
+        data = json.load(response)
 
-if data.get("status") != "ok":
-    raise SystemExit(1)
+    if data.get("status") == "ok":
+        raise SystemExit(0)
+
+except Exception:
+    pass
+
+raise SystemExit(1)
 PY
     then
         health_ok=1
@@ -133,8 +139,11 @@ done
 if [[ "${health_ok}" -ne 1 ]]; then
     echo "ERROR: streamer health check failed."
     systemctl status svxlink-streamer.service --no-pager -l || true
+    journalctl -u svxlink-streamer.service -n 40 --no-pager || true
     exit 1
 fi
+
+echo "Streamer health check passed."
 
 echo
 echo "Installation complete."

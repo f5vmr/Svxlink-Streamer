@@ -43,8 +43,10 @@ def build_ffmpeg_command():
 
         # SvxLink AUDIO_CHANNEL=0:
         # stream the left TX channel only.
-        "-af",
-        "pan=mono|c0=c0",
+        "-map_channel",
+        "0.0.0",
+        "-ac",
+        "1",
 
         "-codec:a",
         "libmp3lame",
