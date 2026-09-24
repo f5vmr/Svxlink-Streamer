@@ -12,7 +12,7 @@ RuntimeDirectory=svxlink-audio-monitor
 RuntimeDirectoryMode=0775
 
 ExecStart=/usr/bin/python3 /opt/Svxlink-Streamer/streamer/svxlink_streamer.py
-
+Environment=PYTHONUNBUFFERED=1
 Restart=on-failure
 RestartSec=3
 

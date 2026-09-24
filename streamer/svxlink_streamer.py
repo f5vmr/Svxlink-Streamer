@@ -1,67 +1,31 @@
 #!/usr/bin/env python3
 
-import configparser
 import os
+import queue
 import socket
 import subprocess
-import sys
+import threading
 import time
-from pathlib import Path
+
+from flask import Flask, Response
 
 SOCKET_PATH = "/run/svxlink-audio-monitor/tx.sock"
-CONFIG_PATH = "/etc/svxlink-streamer.conf"
 
 PCM_RATE = "48000"
 PCM_CHANNELS = "2"
 
+HTTP_HOST = "127.0.0.1"
+HTTP_PORT = 8765
 
-def load_config():
-    config = configparser.ConfigParser()
+STREAM_BITRATE = "32k"
 
-    if not config.read(CONFIG_PATH):
-        raise RuntimeError(f"Cannot read {CONFIG_PATH}")
+app = Flask(__name__)
 
-    if "stream" not in config:
-        raise RuntimeError(f"Missing [stream] section in {CONFIG_PATH}")
-
-    section = config["stream"]
-
-    required = (
-        "host",
-        "port",
-        "mount",
-        "password",
-    )
-
-    missing = [
-        key
-        for key in required
-        if not section.get(key, "").strip()
-    ]
-
-    if missing:
-        raise RuntimeError(
-            "Missing configuration value(s): "
-            + ", ".join(missing)
-        )
-
-    return section
+listeners = set()
+listeners_lock = threading.Lock()
 
 
-def build_ffmpeg_command(stream):
-    host = stream["host"].strip()
-    port = stream["port"].strip()
-    mount = stream["mount"].strip().lstrip("/")
-    password = stream["password"]
-
-    bitrate = stream.get("bitrate", "32k").strip()
-    name = stream.get("name", "SvxLink TX").strip()
-
-    destination = (
-        f"icecast://source:{password}"
-        f"@{host}:{port}/{mount}"
-    )
-
+def build_ffmpeg_command():
     return [
         "/usr/bin/ffmpeg",
         "-hide_banner",
@@ -78,29 +42,22 @@ def build_ffmpeg_command(stream):
         "pipe:0",
 
         # SvxLink AUDIO_CHANNEL=0:
-        # use the left TX channel only.
+        # stream the left TX channel only.
         "-af",
         "pan=mono|c0=c0",
 
         "-codec:a",
         "libmp3lame",
         "-b:a",
-        bitrate,
-
-        "-content_type",
-        "audio/mpeg",
-
-        "-ice_name",
-        name,
+        STREAM_BITRATE,
 
         "-f",
         "mp3",
-
-        destination,
+        "pipe:1",
     ]
 
 
-def open_socket():
+def open_audio_socket():
     try:
         os.unlink(SOCKET_PATH)
     except FileNotFoundError:
@@ -117,60 +74,133 @@ def open_socket():
     return sock
 
 
-def start_encoder(command):
+def start_encoder():
     return subprocess.Popen(
-        command,
+        build_ffmpeg_command(),
         stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
         bufsize=0,
     )
 
 
-def main():
-    stream = load_config()
-    command = build_ffmpeg_command(stream)
+def publish_mp3(data):
+    dead = []
 
-    sock = open_socket()
+    with listeners_lock:
+        for listener in listeners:
+            try:
+                listener.put_nowait(data)
+            except queue.Full:
+                dead.append(listener)
+
+        for listener in dead:
+            listeners.discard(listener)
+
+
+def encoder_output_worker(encoder):
+    while True:
+        data = encoder.stdout.read(4096)
+
+        if not data:
+            break
+
+        publish_mp3(data)
+
+
+def audio_worker():
+    sock = open_audio_socket()
 
     print(
         f"Listening for SvxLink TX audio on {SOCKET_PATH}",
         flush=True,
     )
 
-    encoder = start_encoder(command)
+    while True:
+        encoder = start_encoder()
+
+        output_thread = threading.Thread(
+            target=encoder_output_worker,
+            args=(encoder,),
+            daemon=True,
+        )
+        output_thread.start()
+
+        try:
+            while encoder.poll() is None:
+                data = sock.recv(65536)
+
+                try:
+                    encoder.stdin.write(data)
+                except (BrokenPipeError, OSError):
+                    break
+
+        finally:
+            try:
+                encoder.kill()
+            except OSError:
+                pass
+
+            try:
+                encoder.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                pass
+
+        time.sleep(1)
+
+
+def stream_generator():
+    listener = queue.Queue(maxsize=64)
+
+    with listeners_lock:
+        listeners.add(listener)
 
     try:
         while True:
-            data = sock.recv(65536)
-
-            if encoder.poll() is not None:
-                print(
-                    "Encoder stopped; restarting",
-                    file=sys.stderr,
-                    flush=True,
-                )
-
-                encoder = start_encoder(command)
-
-            try:
-                encoder.stdin.write(data)
-            except (BrokenPipeError, OSError):
-                try:
-                    encoder.kill()
-                except OSError:
-                    pass
-
-                time.sleep(1)
-                encoder = start_encoder(command)
+            data = listener.get()
+            yield data
 
     finally:
-        if encoder.poll() is None:
-            encoder.terminate()
+        with listeners_lock:
+            listeners.discard(listener)
 
-        sock.close()
-        try:
-            os.unlink(SOCKET_PATH)
-        except FileNotFoundError:
-            pass
+
+@app.route("/stream.mp3")
+def stream():
+    return Response(
+        stream_generator(),
+        mimetype="audio/mpeg",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        },
+    )
+
+
+@app.route("/health")
+def health():
+    with listeners_lock:
+        listener_count = len(listeners)
+
+    return {
+        "status": "ok",
+        "listeners": listener_count,
+        "stream": "/stream.mp3",
+    }
+
+
+def main():
+    worker = threading.Thread(
+        target=audio_worker,
+        daemon=True,
+    )
+    worker.start()
+
+    app.run(
+        host=HTTP_HOST,
+        port=HTTP_PORT,
+        threaded=True,
+        use_reloader=False,
+    )
 
 
 if __name__ == "__main__":
