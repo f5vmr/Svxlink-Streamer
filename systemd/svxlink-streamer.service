@@ -1,0 +1,26 @@
+[Unit]
+Description=SvxLink TX Audio Streamer
+After=network-online.target svxlink.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=svxlink
+Group=svxlink
+
+RuntimeDirectory=svxlink-audio-monitor
+RuntimeDirectoryMode=0775
+
+ExecStart=/usr/bin/python3 /opt/Svxlink-Streamer/streamer/svxlink_streamer.py
+
+Restart=on-failure
+RestartSec=3
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/run/svxlink-audio-monitor
+
+[Install]
+WantedBy=multi-user.target
