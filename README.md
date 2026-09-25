@@ -236,14 +236,14 @@ The streamer provides a small local Flask service.
 It listens only on:
 
 ```text
-127.0.0.1:8765
+127.0.0.1:8766
 ```
 
 The two principal endpoints are:
 
 ```text
-http://127.0.0.1:8765/health
-http://127.0.0.1:8765/stream.mp3
+http://127.0.0.1:8766/health
+http://127.0.0.1:8766/stream.mp3
 ```
 
 The health endpoint returns JSON similar to:
@@ -270,7 +270,7 @@ SvxLink-Dash V4.0 acts as the external interface to the streamer.
 The dashboard checks:
 
 ```text
-http://127.0.0.1:8765/health
+http://127.0.0.1:8766/health
 ```
 
 to determine whether the streamer is available.
@@ -284,7 +284,7 @@ The dashboard then provides a same-origin proxy:
 which internally connects to:
 
 ```text
-http://127.0.0.1:8765/stream.mp3
+http://127.0.0.1:8766/stream.mp3
 ```
 
 This means the browser always uses the same hostname, address, port and
@@ -303,7 +303,7 @@ http://192.168.1.214:5000/stream/live.mp3
 ```
 
 A remotely accessed dashboard therefore does not need direct access to port
-`8765`.
+`8766`.
 
 This also avoids mixed-content problems where the dashboard may later be
 served using HTTPS.
@@ -528,7 +528,7 @@ import json
 import urllib.request
 
 with urllib.request.urlopen(
-    "http://127.0.0.1:8765/health",
+    "http://127.0.0.1:8766/health",
     timeout=2,
 ) as response:
     print(json.load(response))
@@ -552,7 +552,7 @@ python3 - <<'PY'
 import urllib.request
 
 with urllib.request.urlopen(
-    "http://127.0.0.1:8765/stream.mp3",
+    "http://127.0.0.1:8766/stream.mp3",
     timeout=5,
 ) as response:
     print(response.status)

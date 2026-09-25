@@ -115,7 +115,7 @@ import urllib.request
 
 try:
     with urllib.request.urlopen(
-        "http://127.0.0.1:8765/health",
+        "http://127.0.0.1:8766/health",
         timeout=2,
     ) as response:
         data = json.load(response)
@@ -153,7 +153,7 @@ echo "  svxlink.service          ACTIVE"
 echo "  svxlink-streamer.service ACTIVE"
 echo
 echo "Local stream:"
-echo "  http://127.0.0.1:8765/stream.mp3"
+echo "  http://127.0.0.1:8766/stream.mp3"
 echo
 echo "Health:"
-echo "  http://127.0.0.1:8765/health"
+echo "  http://127.0.0.1:8766/health"

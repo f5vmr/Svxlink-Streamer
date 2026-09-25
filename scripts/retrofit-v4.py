@@ -79,8 +79,8 @@ def patch_app(path):
         )
 
         helper = '''
-STREAMER_HEALTH_URL = "http://127.0.0.1:8765/health"
-STREAMER_AUDIO_URL = "http://127.0.0.1:8765/stream.mp3"
+STREAMER_HEALTH_URL = "http://127.0.0.1:8766/health"
+STREAMER_AUDIO_URL = "http://127.0.0.1:8766/stream.mp3"
 
 
 def streamer_is_available():
