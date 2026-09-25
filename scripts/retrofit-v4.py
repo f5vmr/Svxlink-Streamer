@@ -30,6 +30,16 @@ def replace_once(text, old, new, description):
 def patch_app(path):
     text = path.read_text(encoding="utf-8")
 
+    text = text.replace(
+        "http://127.0.0.1:8765/health",
+        "http://127.0.0.1:8766/health",
+    )
+
+    text = text.replace(
+        "http://127.0.0.1:8765/stream.mp3",
+        "http://127.0.0.1:8766/stream.mp3",
+    )
+
     if "def streamer_is_available():" not in text:
         old = (
             "from flask import Flask, render_template, request, "
