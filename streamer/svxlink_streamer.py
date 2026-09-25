@@ -13,6 +13,17 @@ SOCKET_PATH = "/run/svxlink-audio-monitor/tx.sock"
 
 PCM_RATE = "48000"
 PCM_CHANNELS = "2"
+PCM_SAMPLE_BYTES = 2
+SILENCE_INTERVAL = 0.02
+
+SILENCE_BYTES = (
+    int(PCM_RATE)
+    * int(PCM_CHANNELS)
+    * PCM_SAMPLE_BYTES
+    * SILENCE_INTERVAL
+)
+
+SILENCE_CHUNK = bytes(int(SILENCE_BYTES))
 
 HTTP_HOST = "127.0.0.1"
 HTTP_PORT = 8766
@@ -72,6 +83,7 @@ def open_audio_socket():
 
     sock.bind(SOCKET_PATH)
     os.chmod(SOCKET_PATH, 0o660)
+    sock.settimeout(SILENCE_INTERVAL)
 
     return sock
 
@@ -129,7 +141,10 @@ def audio_worker():
 
         try:
             while encoder.poll() is None:
-                data = sock.recv(65536)
+                try:
+                    data = sock.recv(65536)
+                except socket.timeout:
+                    data = SILENCE_CHUNK
 
                 try:
                     encoder.stdin.write(data)
