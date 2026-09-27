@@ -57,7 +57,12 @@ def build_ffmpeg_command():
         # SvxLink AUDIO_CHANNEL=0:
         # stream the left TX channel only.
         "-af",
-        "pan=mono|c0=c0,bandreject=f=74.4:width_type=h:w=5",
+        ("pan=mono|c0=c0,"
+        "bandreject=f=75:width_type=h:w=120,"
+        "bandreject=f=125:width_type=h:w=120,"
+        "bandreject=f=185:width_type=h:w=120,"
+        "bandreject=f=245:width_type=h:w=120"
+        ),
         "-ac",
         "1",
 
