@@ -18,6 +18,7 @@ PCM_SAMPLE_BYTES = 2
 
 SOCKET_POLL_INTERVAL = 0.02
 IDLE_THRESHOLD = 0.25
+CTCSS_CHECK_INTERVAL = 1.0
 
 SILENCE_BYTES = int(
     int(PCM_RATE)
@@ -39,14 +40,21 @@ listeners = set()
 listeners_lock = threading.Lock()
 
 
-def tx_ctcss_frequency():
+def tx_ctcss_frequency(report_errors=True):
     config = configparser.ConfigParser(interpolation=None)
 
     try:
-        with open("/etc/svxlink/svxlink.conf", encoding="utf-8") as source:
+        with open(
+            "/etc/svxlink/svxlink.conf",
+            encoding="utf-8",
+        ) as source:
             config.read_file(source)
     except (OSError, configparser.Error) as exc:
-        print(f"Cannot read TX CTCSS configuration: {exc}", flush=True)
+        if report_errors:
+            print(
+                f"Cannot read TX CTCSS configuration: {exc}",
+                flush=True,
+            )
         return None
 
     if not config.has_option("Tx1", "CTCSS_FQ"):
@@ -57,19 +65,33 @@ def tx_ctcss_frequency():
     try:
         frequency = float(value)
     except ValueError:
-        print(f"Invalid [Tx1] CTCSS_FQ: {value!r}", flush=True)
+        if report_errors:
+            print(
+                f"Invalid [Tx1] CTCSS_FQ: {value!r}",
+                flush=True,
+            )
         return None
 
     if not 67.0 <= frequency <= 254.1:
-        print(f"Invalid [Tx1] CTCSS_FQ: {value!r}", flush=True)
+        if report_errors:
+            print(
+                f"Invalid [Tx1] CTCSS_FQ: {value!r}",
+                flush=True,
+            )
         return None
 
     return frequency
 
 
-def build_ffmpeg_command():
+def ctcss_frequency_changed(active_frequency):
+    return (
+        tx_ctcss_frequency(report_errors=False)
+        != active_frequency
+    )
+
+
+def build_ffmpeg_command(frequency):
     audio_filter = "pan=mono|c0=c0"
-    frequency = tx_ctcss_frequency()
 
     if frequency is not None:
         audio_filter += (
@@ -127,9 +149,9 @@ def open_audio_socket():
     return sock
 
 
-def start_encoder():
+def start_encoder(frequency):
     return subprocess.Popen(
-        build_ffmpeg_command(),
+        build_ffmpeg_command(frequency),
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         bufsize=0,
@@ -169,7 +191,11 @@ def audio_worker():
     )
 
     while True:
-        encoder = start_encoder()
+        active_frequency = tx_ctcss_frequency()
+        encoder = start_encoder(active_frequency)
+        next_ctcss_check = (
+            time.monotonic() + CTCSS_CHECK_INTERVAL
+        )
 
         output_thread = threading.Thread(
             target=encoder_output_worker,
@@ -184,6 +210,22 @@ def audio_worker():
 
         try:
             while encoder.poll() is None:
+                current_time = time.monotonic()
+
+                if current_time >= next_ctcss_check:
+                    next_ctcss_check = (
+                        current_time + CTCSS_CHECK_INTERVAL
+                    )
+
+                    if ctcss_frequency_changed(
+                        active_frequency
+                    ):
+                        print(
+                            "TX CTCSS configuration changed; "
+                            "restarting the audio encoder.",
+                            flush=True,
+                        )
+                        break
                 try:
                     data = sock.recv(65536)
 
