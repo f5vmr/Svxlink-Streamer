@@ -6,6 +6,7 @@ import socket
 import subprocess
 import threading
 import time
+import configparser
 
 from flask import Flask, Response
 
@@ -38,7 +39,43 @@ listeners = set()
 listeners_lock = threading.Lock()
 
 
+def tx_ctcss_frequency():
+    config = configparser.ConfigParser(interpolation=None)
+
+    try:
+        with open("/etc/svxlink/svxlink.conf", encoding="utf-8") as source:
+            config.read_file(source)
+    except (OSError, configparser.Error) as exc:
+        print(f"Cannot read TX CTCSS configuration: {exc}", flush=True)
+        return None
+
+    if not config.has_option("Tx1", "CTCSS_FQ"):
+        return None
+
+    value = config.get("Tx1", "CTCSS_FQ").strip()
+
+    try:
+        frequency = float(value)
+    except ValueError:
+        print(f"Invalid [Tx1] CTCSS_FQ: {value!r}", flush=True)
+        return None
+
+    if not 67.0 <= frequency <= 254.1:
+        print(f"Invalid [Tx1] CTCSS_FQ: {value!r}", flush=True)
+        return None
+
+    return frequency
+
+
 def build_ffmpeg_command():
+    audio_filter = "pan=mono|c0=c0"
+    frequency = tx_ctcss_frequency()
+
+    if frequency is not None:
+        audio_filter += (
+            f",bandreject=f={frequency:g}:width_type=h:w=5"
+        )
+
     return [
         "/usr/bin/ffmpeg",
         "-hide_banner",
@@ -57,7 +94,7 @@ def build_ffmpeg_command():
         # SvxLink AUDIO_CHANNEL=0:
         # stream the left TX channel only.
         "-af",
-        "pan=mono|c0=c0,bandreject=f=75:width_type=h:w=120,bandreject=f=125:width_type=h:w=120,bandreject=f=185:width_type=h:w=120,bandreject=f=245:width_type=h:w=120",
+        audio_filter,
         "-ac",
         "1",
 
