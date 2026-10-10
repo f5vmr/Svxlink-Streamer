@@ -263,9 +263,9 @@ network**.
 
 ---
 
-## SvxLink-Dash V4.0 Integration
+## SvxLink-Dash V4.1 Integration
 
-SvxLink-Dash V4.0 acts as the external interface to the streamer.
+SvxLink-Dash V4.1 acts as the external interface to the streamer.
 
 The dashboard checks:
 
@@ -611,9 +611,9 @@ sox /tmp/svxlink_tx_capture.wav -n stat
 
 ---
 
-## Existing SvxLink-Dash V4.0 Installations
+## Existing SvxLink-Dash V4.1 Installations
 
-Existing configured V4.0 installations should **not** rerun the complete V4
+Existing configured V4.1 installations should **not** rerun the complete V4
 installer simply to gain streaming support.
 
 The repository therefore provides a dedicated retrofit path.
@@ -645,9 +645,9 @@ Backups are stored beneath:
 
 ---
 
-## New SvxLink-Dash V4.0 Installations
+## New SvxLink-Dash V4.1 Installations
 
-Current SvxLink-Dash V4.0 installations automatically install
+Current SvxLink-Dash V4.1 installations automatically install
 Svxlink-Streamer.
 
 The V4 installer:
@@ -791,7 +791,7 @@ This separation is intentional.
 SvxLink© is written and maintained by Tobias Blomberg, SM0SVX.
 
 Svxlink-Streamer was developed as an additional monitoring facility for
-SvxLink-Dash© V4.0 both written by Chris JACKSON G4NAB for SvxLink-based nodes.
+SvxLink-Dash© V4.1 both written by Chris JACKSON G4NAB for SvxLink-based nodes.
 
 ---
 
